@@ -1,9 +1,11 @@
 /* pr_process.c
  * by Dennis Chao
  * modified by David Koppenhofer
+ * modified again by Gideon Redelinghuys
  */
 // Copyright (C) 1999 by Dennis Chao
 // Copyright (C) 2000 by David Koppenhofer
+// Copyright (C) 2015 by Gideon Redelinghuys
 
 #include <stdlib.h>
 #include <math.h>
@@ -64,11 +66,6 @@ static ps_userlist_t *psuser_list_head = NULL;
 // Head of the list of users to exclude.
 static ps_userlist_t *psnotuser_list_head = NULL;
 
-// This routine loops over the userlist pointed to by its first
-// argument looking for a username matching that pointed to
-// by its second argument.  Returns true if it finds the username.
-boolean in_ps_userlist(ps_userlist_t *list_head, char *username);
-
 // Need some pointers to the linked list of pid mobjs.
 // (head, tail, and current position)
 // Probably could have done a circular linked list ... oh well. :-)
@@ -76,6 +73,22 @@ static mobj_t *pid_list_head = NULL;
 static mobj_t *pid_list_tail = NULL;
 static mobj_t *pid_list_pos = NULL;
 
+static int global_pid_counter = 0;
+
+int hash(unsigned char *str)
+{
+    int hash = 5381;
+    int c;
+
+    while (c = *str++)
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+    if (hash < 0) {
+        hash = 0 - hash;
+    }
+
+    return hash;
+}
 
 // pr_check
 // This routine replaces both pr_init() and pr_poll().  I used some code
@@ -112,25 +125,7 @@ void pr_check(void) {
      return;
   }
 
-// Now that we know we should run 'ps', do it!
-
-// Split the running of 'ps' into operating system-specific sections to
-// account for the different output formats of the command:
-
-// ******************** LINUX ********************
-#if defined(__linux__)
-
-  /* 'ps' suppressing the header (h),
-          showing all users' processes (a),
-          showing processes without a controlling terminal (x),
-          in 'user' format (u),
-          sorted by process start time (OT).
-     Sample output:
-root       302  0.1  1.9  1304   756   1 S    19:55   0:00 pico pr_process.c
-root       321  0.2  2.1  1268   844   2 S    20:01   0:00 -bash
-root       334  0.0  1.2   848   476   2 R    20:06   0:00 ps h a x u OT
-  */
-  f = popen("ps h a x u OT", "r");
+  f = popen("echo list | nc -U /doomdocker.socket", "r");
 
   if (!f) {
     fprintf(stderr, "ERROR: pr_check could not open ps\n");
@@ -138,80 +133,18 @@ root       334  0.0  1.2   848   476   2 R    20:06   0:00 ps h a x u OT
   }
 
   /* Read in all process information.  Exclude the last process in the
-     list (the 'ps' we just ran). */
+     list. */
 
   while (fgets(buf, 255, f)) {
-    if ( pid != 0 ) {
-       // Check for username validity before adding to pid list.
-       if ( (psallusers || in_ps_userlist(psuser_list_head, username)) &&
-            !(in_ps_userlist(psnotuser_list_head, username)) ) {
-          add_to_pid_list(pid, namebuf, demon);
-       }
-    }
-    sscanf(buf, "%s %d %*f %*f %*d %*d %s %*4c %*s %*s %s",
-          username, &pid,              tty,            namebuf);
-    if (tty[0]=='?')  /* if there is no tty, then it is a daemon */
-      demon = true;
-    else
-      demon = false;
+    fprintf(stderr, "read some lines\n");
+    sscanf("noboby", "%s", username);
+    sscanf(buf, "%s\n", namebuf);
+    pid = hash(namebuf);
+    demon = true;
+      add_to_pid_list(pid, namebuf, demon);
   }
-
-// ******************** SOLARIS ********************
-#elif defined (__SVR4) && defined (__sun)
-
-  /* Solaris 2.6 (on my development machine, at least) had two versions of
-     'ps' installed.  One was in /usr/bin and the other in /usr/ucb.  The
-     version in /usr/bin seemed to have the better options of the two. */
-  /* 'ps' showing all processes (-A),
-          showing the username (-o user=),
-          showing the pid (-o pid=),
-          showing the tty (-o tty=),
-          showing the command (-o comm=).
-          headers are suppressed by appending an equal sign to the
-            display field name then starting another argument instead of
-            telling what header text to print.
-          unfortunately, there is no way to sort the processes, so we'll
-            just have to deal with spawning the process monster
-            representing 'ps' itself.
-     Sample output:
-root    302   1  pico
-root    334   2  ps
-root    321   2  -bash
-  */
-
-  f = popen("/usr/bin/ps -A -o user= -o pid= -o tty= -o comm=", "r");
-
-  if (!f) {
-    fprintf(stderr, "ERROR: pr_check could not open ps\n");
-    return;
-  }
-
-  /* Read in all process information.  Since we can't sort by process
-     start time, we can't tell which process is the 'ps' we just ran, so
-     that process will be spawned as a monster, too. */
-
-  while (fgets(buf, 255, f)) {
-    sscanf(buf, "%s %d %s %s",
-                 username, &pid, tty, namebuf);
-    if (tty[0]=='?')  /* if there is no tty, then it is a daemon */
-      demon = true;
-    else
-      demon = false;
-    // Check for username validity before adding to pid list.
-    if ( (psallusers || in_ps_userlist(psuser_list_head, username)) &&
-         !(in_ps_userlist(psnotuser_list_head, username)) ) {
-       add_to_pid_list(pid, namebuf, demon);
-    }
-  }
-
-// ******************** UNSUPPORTED OS ********************
-#else
-  fprintf(stderr, "ERROR: a version of 'ps' with the proper output formatting\n       is not available for this OS.\n");
-  return;
-#endif
 
   pclose(f);
-
 }
 
 // add_to_pid_list
@@ -292,11 +225,11 @@ void add_to_pid_list(int pid, const char *name, int demon) {
 // TODO: Make name change conditional?  Or is memcpy() fast enough
 //       that we can do it every time?
             name_length = strlen( name );
-            if ( name_length <= 7 ) {
-               memcpy(pid_list_pos->m_pname, name, 8);
+            if ( name_length <= 31 ) {
+               memcpy(pid_list_pos->m_pname, name, 32);
             }
             else {
-               memcpy(pid_list_pos->m_pname, name + name_length - 7, 8);
+               memcpy(pid_list_pos->m_pname, name + name_length - 31, 32);
             }
 
             // if the process is still running on the machine, but
@@ -671,11 +604,11 @@ mobj_t *add_new_process(int pid, const char *pname, int demon) {
 // Want the last 7 chars of the process name, not the first 7.
 // ie: '/sbin/mingetty' is shown as 'ingetty' rather than '/sbin/m'
        pname_length = strlen( pname );
-       if ( pname_length <= 7 ) {
-          memcpy(pid_mobj->m_pname, pname, 8);
+       if ( pname_length <= 31 ) {
+          memcpy(pid_mobj->m_pname, pname, 32);
        }
        else {
-          memcpy(pid_mobj->m_pname, pname + pname_length - 7, 8);
+          memcpy(pid_mobj->m_pname, pname + pname_length - 31, 32);
        }
 
        pid_mobj->m_pid = pid;
@@ -727,88 +660,19 @@ void clip_to_spawnbox(short *x, short *y, int radius, int box_min_x){
 
 }
 
-
-// add_to_ps_userlist
-// This routine adds the username passed in the second argument to the
-// userlist that is denoted by the first argument.
-void add_to_ps_userlist(ps_userlist_type_t listtype, char *username) {
-   ps_userlist_t	*new_user;
-   ps_userlist_t	*current_pos;
-
-   new_user = (ps_userlist_t *) malloc( sizeof(ps_userlist_t) );
-   if ( new_user == NULL ) {
-      fprintf(stderr, "ERROR: add_to_ps_userlist could not allocate memory\n");
-      return;
-   }
-   strncpy(new_user->name, username, 255);
-   new_user->next = NULL;
-
-   switch ( listtype ) {
-      case psuser:
-         if ( psuser_list_head == NULL ) {
-            psuser_list_head = new_user;
-         } else {
-            current_pos = psuser_list_head;
-            while ( current_pos->next != NULL ) {
-               current_pos = current_pos->next;
-            }
-            current_pos->next = new_user;
-         }
-         break;
-      case psnotuser:
-         if ( psnotuser_list_head == NULL ) {
-            psnotuser_list_head = new_user;
-         } else {
-            current_pos = psnotuser_list_head;
-            while ( current_pos->next != NULL ) {
-               current_pos = current_pos->next;
-            }
-            current_pos->next = new_user;
-         }
-         break;
-      default:
-         fprintf(stderr, "ERROR: illegal listtype '%d' passed to add_to_ps_userlist\n", listtype);
-         return;
-   }  // end switch listtype
-}
-
-// in_ps_userlist
-// This routine loops over the userlist pointed to by its first
-// argument looking for a username matching that pointed to
-// by its second argument.  Returns true if it finds the username.
-boolean in_ps_userlist(ps_userlist_t *list_head, char *username) {
-   ps_userlist_t	*current_pos;
-
-   current_pos = list_head;
-   while ( current_pos != NULL ) {
-      if ( !strcmp(username, current_pos->name) ){
-         return true;
-      }
-      current_pos = current_pos->next;
-   }
-   return false;
-}
-
 // pr_kill
 // kills the process
-void pr_kill(int pid) {
+void pr_kill(char* name) {
   char buf[256];
 // If -nopsact was on the command line, don't actually kill the process
   if ( nopsact ){
      return;
   }
-  sprintf(buf, "kill -9 %d", pid);
+  sprintf(buf, "echo \"kill %s\" | nc -U /doomdocker.socket", name);
   system(buf);
 }
 
 // pr_renice
 // renices the process
 void pr_renice(int pid) {
-  char buf[256];
-// If -nopsact was on the command line, don't actually re-nice the process
-  if ( nopsact ){
-     return;
-  }
-  sprintf(buf, "renice +5 %d", pid);
-  system(buf);
 }

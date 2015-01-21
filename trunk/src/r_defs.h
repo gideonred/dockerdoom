@@ -413,7 +413,7 @@ typedef struct vissprite_s
 // *** PID BEGIN ***
     // the process id (0 if not a process)
     int                 m_pid;
-    char                m_pname[8];
+    char                m_pname[32];
 
     // Need another variable for advanced process management:
     // A flag to tell whether to draw the pid info.

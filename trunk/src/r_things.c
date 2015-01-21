@@ -643,7 +643,7 @@ void R_ProjectSprite (mobj_t* thing)
 // *** PID BEGIN ***
 // Set the pid and name in the vissprite.
     vis->m_pid = thing->m_pid;
-    memcpy(vis->m_pname, thing->m_pname, 8);
+    memcpy(vis->m_pname, thing->m_pname, 32);
 // Also set flag that tells whether to draw the pid info or not.
     vis->m_draw_pid_info = thing->m_draw_pid_info;
 // *** PID END ***

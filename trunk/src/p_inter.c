@@ -690,7 +690,7 @@ P_KillMobj
 // removing the monster from the game engine now.)
     if (target->m_pid != 0 && target->m_del_from_pid_list == true) {
        fprintf(stderr, "kill process %d\n", target->m_pid);
-       pr_kill(target->m_pid);
+       pr_kill(target->m_pname);
 
        target->m_draw_pid_info = false; /* set to false so corpse
                                            doesn't have pid      */
