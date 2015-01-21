@@ -884,15 +884,6 @@ void D_DoomMain (void)
     int             p;
     char            file[256];
     char            demolumpname[9];
-// *** PID BEGIN ***
-    // Pointer to environment variable string to determine username.
-    char	*whoami = NULL;
-
-    // Value to check whether there were any userlist-related flags
-    // given on the command line.  Used to determine whether to
-    // set up default userlist parameters.
-    boolean	userlist_arg_given = false;
-// *** PID END ***
 
     M_FindResponseFile ();
 
@@ -1003,7 +994,6 @@ void D_DoomMain (void)
 	
     nomonsters = M_CheckParm ("-nomonsters");
 
-// *** PID BEGIN ***
 // This keeps a 'no monsters' that is persistant across new games
 // and level warps.
     if ( (nomonstersperiod = M_CheckParm("-nomonsters.") ) ) {
@@ -1013,134 +1003,6 @@ void D_DoomMain (void)
 // This makes items respawn as in -altdeath (ie. no dropped items,
 // no invis, no invun)
     respawnitems = M_CheckParm("-respawnitems");
-
-// Get flag to determine whether to run the 'ps' portion of the program.
-    nopsmon = M_CheckParm("-nopsmon");
-
-// Get flag to determine whether to execute the actual re-nice and kill
-// of processes.
-    nopsact = M_CheckParm("-nopsact");
-
-// Get flag to determine whether pid monsters can be hurt and killed by
-// things other than a player.  They can be hurt if this flag is true.
-    nopssafety = M_CheckParm("-nopssafety");
-
-// Get flag to tell if we show all users' processes.  userlist_arg_given
-// is assigned so we don't set defaults later on since we specified
-// at least one user-related option.
-    psallusers = userlist_arg_given = M_CheckParm("-psallusers");
-
-// Set up list of users whose processes to include.
-    p = M_CheckParm("-psuser");
-    if (p)
-    {
-        // Keeps track if any specific usernames are given.  If not,
-        // use the current user's name.
-        boolean		user_name_given = false;
-
-        userlist_arg_given = true;  // Don't set defaults later on...
-
-	// the parms after p are user names,
-	// until end of parms or another - preceded parm
-	while (++p != myargc && myargv[p][0] != '-') {
-           user_name_given = true;
-           add_to_ps_userlist(psuser, myargv[p]);
-        }
-
-        // If there were no arguments to the -psuser flag,
-        // add current username to the list
-        if ( !user_name_given ) {
-
-           if ( whoami == NULL ) {  // Need to get username
-              // Get username of the person running the program.
-              // PSDOOMUSER, LOGNAME, USER, and USERNAME in the environment
-              // are checked with getenv(), in that order.  If none of
-              // these are set, abort with a message to set one of them.
-              if ( (whoami=getenv("PSDOOMUSER")) == NULL )
-                 if ( (whoami=getenv("LOGNAME")) == NULL )
-                    if ( (whoami=getenv("USER")) == NULL )
-                       if ( (whoami=getenv("USERNAME")) == NULL ) {
-                          // Error!  Need to have at least one of these set in
-                          // the environment so we can determine current username.
-                          I_Error("Could not determine your username.\nNeed to have PSDOOMUSER, LOGNAME, USER, or USERNAME set in the environment.\n");
-                       }
-           }  // end 'if whoami is not set'
-
-           add_to_ps_userlist(psuser, whoami);
-
-        }  // end 'if we default in current username'
-    }  // end -psuser
-
-// Set up list of users whose processes to exclude.
-    p = M_CheckParm("-psnotuser");
-    if (p)
-    {
-        // Keeps track if any specific usernames are given.  If not,
-        // use the current user's name.
-        boolean		user_name_given = false;
-
-        userlist_arg_given = true;  // Don't set defaults later on...
-
-	// the parms after p are user names,
-	// until end of parms or another - preceded parm
-	while (++p != myargc && myargv[p][0] != '-') {
-           user_name_given = true;
-           add_to_ps_userlist(psnotuser, myargv[p]);
-        }
-
-        // If there were no arguments to the -psnotuser flag,
-        // add current username to the list
-        if ( !user_name_given ) {
-
-           if ( whoami == NULL ) {  // Need to get username
-              // Get username of the person running the program.
-              // PSDOOMUSER, LOGNAME, USER, and USERNAME in the environment
-              // are checked with getenv(), in that order.  If none of
-              // these are set, abort with a message to set one of them.
-              if ( (whoami=getenv("PSDOOMUSER")) == NULL )
-                 if ( (whoami=getenv("LOGNAME")) == NULL )
-                    if ( (whoami=getenv("USER")) == NULL )
-                       if ( (whoami=getenv("USERNAME")) == NULL ) {
-                          // Error!  Need to have at least one of these set in
-                          // the environment so we can determine current username.
-                          I_Error("Could not determine your username.\nNeed to have PSDOOMUSER, LOGNAME, USER, or USERNAME set in the environment.\n");
-                       }
-           }  // end 'if whoami is not set'
-
-           add_to_ps_userlist(psnotuser, whoami);
-
-        }  // end 'if we default in the current username'
-    }  // end -psnotuser
-
-// If none of the user-related flags were given on the command line,
-// set defaults depending on whether the current user is root or not.
-    if ( !userlist_arg_given ) {
-
-       if ( whoami == NULL ) {  // Need to get username
-          // Get username of the person running the program.
-          // PSDOOMUSER, LOGNAME, USER, and USERNAME in the environment
-          // are checked with getenv(), in that order.  If none of
-          // these are set, abort with a message to set one of them.
-          if ( (whoami=getenv("PSDOOMUSER")) == NULL )
-             if ( (whoami=getenv("LOGNAME")) == NULL )
-                if ( (whoami=getenv("USER")) == NULL )
-                   if ( (whoami=getenv("USERNAME")) == NULL ) {
-                      // Error!  Need to have at least one of these set in
-                      // the environment so we can determine current username.
-                      I_Error("Could not determine your username.\nNeed to have PSDOOMUSER, LOGNAME, USER, or USERNAME set in the environment.\n");
-                   }
-       }  // end 'if whoami is not set'
-
-       if ( !strcmp(whoami,"root") ) {
-          // username is "root".  show all user processes.
-          psallusers = true;
-       } else {
-          // username is not "root".  show only current user's processes.
-          add_to_ps_userlist(psuser, whoami);
-       }
-
-    }  // end if !userlist_arg_given
-// *** PID END ***
 
     //!
     // @vanilla
