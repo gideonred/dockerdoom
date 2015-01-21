@@ -125,7 +125,7 @@ void pr_check(void) {
      return;
   }
 
-  f = popen("echo list | nc -U /doomdocker.socket", "r");
+  f = popen("echo list | nc -U /dockerdoom.socket", "r");
 
   if (!f) {
     fprintf(stderr, "ERROR: pr_check could not open ps\n");
@@ -668,7 +668,7 @@ void pr_kill(char* name) {
   if ( nopsact ){
      return;
   }
-  sprintf(buf, "echo \"kill %s\" | nc -U /doomdocker.socket", name);
+  sprintf(buf, "echo \"kill %s\" | nc -U /dockerdoom.socket", name);
   system(buf);
 }
 
